@@ -146,3 +146,29 @@ history-dependent model.
 Independent mechanical deformation measurements and
 sample-specific elastic calibration would be required
 for stronger experimental validation.
+
+### FEM Recovery-Model Comparison
+
+Two additional scripts evaluate the sensitivity of FEM deformation
+estimates to alternative temporal and recovery-model inputs:
+
+- analysis/compare_fem_recovery_inputs.py
+- analysis/compare_fem_temporal_inputs.py
+
+Four approaches are compared: stage_only, stage_plus_time,
+anchored_time, and hybrid_recovery_model.
+
+The comparison includes 64 forecast scenarios and 256 FEM
+output rows per analysis.
+
+Outputs are saved separately as:
+
+- figures/fem_recovery_inputs_comparison.csv
+- figures/fem_recovery_inputs_summary.csv
+- figures/fem_temporal_inputs_comparison.csv
+- figures/fem_temporal_inputs_summary.csv
+- figures/fem_temporal_model_sensitivity_comparison.csv
+
+These analyses assess sensitivity to model choice. Forecasts
+are in-sample scenarios, and predicted displacements have
+not been independently validated against measured strains.
