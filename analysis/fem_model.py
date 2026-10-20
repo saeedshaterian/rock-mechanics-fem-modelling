@@ -145,11 +145,21 @@ radial_axis_dofs = basis.get_dofs(
 ).all(["u^1"])
 
 # Fix one axial displacement DOF to remove rigid translation.
-bottom_axis = basis.get_dofs(
-    lambda x: np.isclose(x[0], 0.0)
-    & np.isclose(x[1], 0.0)
-).all(["u^2"])
+coordinates = mesh.p
 
+bottom_axis_node = np.flatnonzero(
+    np.isclose(coordinates[0], 0.0)
+    & np.isclose(coordinates[1], 0.0)
+)
+
+if len(bottom_axis_node) != 1:
+    raise RuntimeError(
+        "Expected exactly one bottom-axis node."
+    )
+
+bottom_axis = np.array([
+    basis.nodal_dofs[1, bottom_axis_node[0]]
+], dtype=int)
 D = np.unique(
     np.concatenate([radial_axis_dofs, bottom_axis])
 )

@@ -161,6 +161,8 @@ anchored_time, and hybrid_recovery_model.
 The comparison includes 64 forecast scenarios and 256 FEM
 output rows per analysis.
 
+The temporal analysis performs 256 FEM evaluations, while the final `fem_temporal_inputs_comparison.csv` contains eight aggregated model-comparison rows. The detailed numerical evaluations and summary tables should therefore be distinguished from the aggregated comparison output.
+
 Outputs are saved separately as:
 
 - figures/fem_recovery_inputs_comparison.csv
@@ -169,6 +171,65 @@ Outputs are saved separately as:
 - figures/fem_temporal_inputs_summary.csv
 - figures/fem_temporal_model_sensitivity_comparison.csv
 
+The temporal analysis performs 256 FEM evaluations, while the final fem_temporal_inputs_comparison.csv contains eight aggregated model-comparison rows.
+
 These analyses assess sensitivity to model choice. Forecasts
 are in-sample scenarios, and predicted displacements have
 not been independently validated against measured strains.
+### Numerical Verification and Boundary-Condition Assessment
+
+The finite element implementation was subjected to additional numerical verification and a systematic review of its boundary-condition definitions.
+
+#### Boundary Conditions
+
+For the axisymmetric pressure-loading and history-dependent models:
+
+- Radial displacement is constrained along the symmetry axis (`r = 0`).
+- A single axial displacement degree of freedom is constrained at the bottom-axis node (`r = 0, z = 0`) to remove rigid-body axial translation.
+- The bottom-axis node is identified directly from mesh coordinates, with an explicit check that exactly one node is selected.
+
+The independent validation script uses the same direct nodal degree-of-freedom approach.
+
+The separate uniaxial benchmark constrains axial displacement along the entire bottom face. This is consistent with its analytical reference solution for uniform axial compression and traction-free lateral surfaces.
+
+#### Analytical and Numerical Verification
+
+The homogeneous elastic cylinder was evaluated against analytical displacement solutions under prescribed pressure loading.
+
+The reference pressure-loading benchmark at 5700 psi gives approximately:
+
+- Analytical and FEM axial shortening: 0.147271 mm
+- Analytical and FEM radial contraction: 0.040717 mm
+
+Mesh convergence was assessed across four mesh resolutions and three pressure levels.
+
+An additional uniform-eigenstrain verification test was implemented in `analysis/fem_eigenstrain_validation.py`.
+
+For a prescribed uniform isotropic eigenstrain, the numerical displacement field was compared with the corresponding stress-free analytical solution.
+
+Across the tested meshes, the maximum absolute displacement discrepancy was approximately `2.76e-15 m`. The maximum computed mechanical stress was approximately `0.023842 Pa`, corresponding to a relative stress scale of approximately `1.06e-9` for the finest mesh.
+
+These results support the numerical consistency of the implemented eigenstrain formulation for the homogeneous benchmark.
+
+#### Boundary-Condition Revision and Regression Checks
+
+The axial reference constraint was made explicit in the relevant pressure-loading, history-dependent, recovery-comparison, and temporal-comparison scripts.
+
+Previously generated CSV outputs were retained as local backups and compared with the results obtained after the boundary-condition revision.
+
+For the directly compared outputs:
+
+- Input pressure, porosity, permeability, and eigenstrain quantities remained unchanged.
+- Differences in FEM axial displacements were on the order of `1e-14` to `1e-12 mm`, depending on the analysis.
+- Differences in FEM radial displacements were on the order of `1e-15` to `1e-14 mm`.
+- No materially significant change in the reported deformation results was observed.
+
+The regression checks establish consistency of the numerical outputs following the boundary-condition revision. They do not constitute independent experimental validation.
+
+#### Scope and Limitations
+
+Analytical displacement agreement, mesh refinement, eigenstrain verification, and regression comparisons provide evidence for the numerical implementation of the tested problems.
+
+The history-dependent deformation formulation remains exploratory. Its eigenstrains are inferred from porosity changes under a constant-grain-volume assumption, and its elastic parameters are illustrative rather than calibrated to sample B9.
+
+Consequently, the predicted history-dependent displacements should not be interpreted as independently validated mechanical deformation measurements.

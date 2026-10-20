@@ -6,3 +6,6 @@ venv/
 .vscode/
 .pytest_cache/
 .ipynb_checkpoints/
+
+# Local backups of FEM results before boundary-condition revisions
+figures/*_before_bc_fix.csv
