@@ -28,10 +28,15 @@ OUTPUT_DIR = ROOT / "figures"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 OUTPUT_FILE = (
-    OUTPUT_DIR / "fem_temporal_inputs_comparison.csv"
+    OUTPUT_DIR / "fem_temporal_inputs_detailed.csv"
 )
+
 SUMMARY_FILE = (
     OUTPUT_DIR / "fem_temporal_inputs_summary.csv"
+)
+
+COMPARISON_FILE = (
+    OUTPUT_DIR / "fem_temporal_inputs_comparison.csv"
 )
 
 SAMPLE_ID = "B9"
@@ -51,6 +56,7 @@ PSI_TO_PA = 6894.757293
 STAGE_ONLY = "stage_only"
 STAGE_PLUS_TIME = "stage_plus_time"
 ANCHORED_TIME = "anchored_time"
+TIME_ONLY = "time_only"
 HYBRID_MODEL = "hybrid_recovery_model"
 
 RECOVERY_STAGES = [
@@ -300,7 +306,51 @@ for recovery_stage, anchor_stage in anchor_stages.items():
         "anchor_stage": anchor_stage,
         "beta_phi": beta,
     }
+# =========================================================
+# 4C. Fit pressure-independent anchored time-only models
+# =========================================================
 
+time_only_models = {}
+
+for recovery_stage, anchor_stage in anchor_stages.items():
+    recovery = df.loc[
+        df["stage"].eq(recovery_stage)
+    ].copy()
+
+    anchor = df.loc[
+        df["stage"].eq(anchor_stage),
+        ["pressure_psi", "porosity_pct"],
+    ].rename(
+        columns={"porosity_pct": "anchor_porosity_pct"}
+    )
+
+    recovery = recovery.merge(
+        anchor,
+        on="pressure_psi",
+        how="left",
+        validate="many_to_one",
+    )
+
+    if recovery["anchor_porosity_pct"].isna().any():
+        raise ValueError(
+            f"Missing anchors for {recovery_stage}"
+        )
+
+    X = np.log1p(
+        recovery["rest_time_hr"].to_numpy(dtype=float)
+    )[:, None]
+
+    y = (
+        recovery["porosity_pct"].to_numpy(dtype=float)
+        - recovery["anchor_porosity_pct"].to_numpy(dtype=float)
+    )
+
+    beta, *_ = np.linalg.lstsq(X, y, rcond=None)
+
+    time_only_models[recovery_stage] = {
+        "anchor_stage": anchor_stage,
+        "beta_phi": float(beta[0]),
+    }
 
 # =========================================================
 # 5. Build recovery scenarios
@@ -595,6 +645,49 @@ for recovery_stage, model in anchored_models.items():
 
 if not np.all(np.isfinite(anchored_phi)):
     raise ValueError("Invalid anchored porosity predictions.")
+# =========================================================
+# Time-only anchored porosity predictions
+# =========================================================
+
+time_only_phi = np.full(len(forecast), np.nan)
+
+for recovery_stage, model in time_only_models.items():
+    mask = forecast["stage"].eq(recovery_stage).to_numpy()
+    subset = forecast.loc[mask].copy()
+
+    anchor = df.loc[
+        df["stage"].eq(model["anchor_stage"]),
+        ["pressure_psi", "porosity_pct"],
+    ].rename(
+        columns={"porosity_pct": "anchor_porosity_pct"}
+    )
+
+    subset = subset.merge(
+        anchor,
+        on="pressure_psi",
+        how="left",
+        validate="many_to_one",
+        sort=False,
+    )
+
+    if subset["anchor_porosity_pct"].isna().any():
+        raise ValueError(
+            f"Missing time-only anchors for {recovery_stage}"
+        )
+
+    log_time = np.log1p(
+        subset["rest_time_hr"].to_numpy(dtype=float)
+    )
+
+    predicted_phi = (
+        subset["anchor_porosity_pct"].to_numpy(dtype=float)
+        + model["beta_phi"] * log_time
+    )
+
+    time_only_phi[mask] = predicted_phi
+
+if not np.all(np.isfinite(time_only_phi)):
+    raise ValueError("Invalid time-only porosity predictions.")
 
 # Hybrid model:
 # 5000 psi recovery -> anchored_time
@@ -616,6 +709,13 @@ hybrid_phi[mask_7000] = prediction_sets[
 
 # Permeability is retained from stage_plus_time for the hybrid
 # output, but it does not drive the current FEM calculation.
+# Register time-only model for FEM sensitivity analysis.
+prediction_sets[TIME_ONLY] = {
+    "porosity": time_only_phi,
+    "permeability": prediction_sets[
+        STAGE_PLUS_TIME
+    ]["permeability"].copy(),
+}
 prediction_sets[ANCHORED_TIME] = {
     "porosity": anchored_phi,
     "permeability": prediction_sets[
@@ -785,9 +885,27 @@ for metric in [
             comparison[f"{metric}_{HYBRID_MODEL}"]
             - comparison[f"{metric}_{reference_model}"]
         )
-
+# Compare the selected time-only model with alternatives.
+for metric in [
+    "mean_porosity_predicted_pct",
+    "mean_eps_v_log_proxy",
+    "mean_combined_axial_mm",
+    "mean_combined_radial_mm",
+]:
+    for reference_model in [
+        ANCHORED_TIME,
+        STAGE_ONLY,
+        STAGE_PLUS_TIME,
+        HYBRID_MODEL,
+    ]:
+        comparison[
+            f"delta_{metric}_time_only_minus_{reference_model}"
+        ] = (
+            comparison[f"{metric}_{TIME_ONLY}"]
+            - comparison[f"{metric}_{reference_model}"]
+        )
 comparison.to_csv(
-    OUTPUT_DIR / "fem_temporal_inputs_comparison.csv",
+    COMPARISON_FILE,
     index=False,
 )
 
@@ -828,10 +946,7 @@ print(
 
 print(f"\nDetailed results: {OUTPUT_FILE}")
 print(f"Summary: {SUMMARY_FILE}")
-print(
-    "Model-to-model comparison: "
-    "figures/fem_temporal_model_sensitivity_comparison.csv"
-)
+print(f"Model-to-model comparison: {COMPARISON_FILE}")
 
 print(
     "\nLIMITATIONS: FEM elastic parameters are illustrative, not calibrated. "

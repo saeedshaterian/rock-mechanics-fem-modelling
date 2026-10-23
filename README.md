@@ -147,35 +147,60 @@ Independent mechanical deformation measurements and
 sample-specific elastic calibration would be required
 for stronger experimental validation.
 
-### FEM Recovery-Model Comparison
+### FEM Recovery-Model and Temporal Sensitivity Comparisons
 
-Two additional scripts evaluate the sensitivity of FEM deformation
-estimates to alternative temporal and recovery-model inputs:
+Two scripts examine how alternative porosity-evolution inputs affect
+axisymmetric FEM deformation estimates:
 
-- analysis/compare_fem_recovery_inputs.py
-- analysis/compare_fem_temporal_inputs.py
+- `analysis/compare_fem_recovery_inputs.py`
+- `analysis/compare_fem_temporal_inputs.py`
 
-Four approaches are compared: stage_only, stage_plus_time,
-anchored_time, and hybrid_recovery_model.
+The recovery-input analysis and temporal-input analysis are separate
+workflows, and their numerical outputs should not be conflated.
 
-The comparison includes 64 forecast scenarios and 256 FEM
-output rows per analysis.
+#### Temporal Model Comparison
 
-The temporal analysis performs 256 FEM evaluations, while the final `fem_temporal_inputs_comparison.csv` contains eight aggregated model-comparison rows. The detailed numerical evaluations and summary tables should therefore be distinguished from the aggregated comparison output.
+The temporal analysis compares five models:
 
-Outputs are saved separately as:
+- `stage_only`
+- `stage_plus_time`
+- `time_only`
+- `anchored_time`
+- `hybrid_recovery_model`
 
-- figures/fem_recovery_inputs_comparison.csv
-- figures/fem_recovery_inputs_summary.csv
-- figures/fem_temporal_inputs_comparison.csv
-- figures/fem_temporal_inputs_summary.csv
-- figures/fem_temporal_model_sensitivity_comparison.csv
+Each model is evaluated for 64 scenarios, giving 320 detailed FEM
+output rows.
 
-The temporal analysis performs 256 FEM evaluations, while the final fem_temporal_inputs_comparison.csv contains eight aggregated model-comparison rows.
+The outputs are:
 
-These analyses assess sensitivity to model choice. Forecasts
-are in-sample scenarios, and predicted displacements have
-not been independently validated against measured strains.
+- `figures/fem_temporal_inputs_detailed.csv` (320 rows)
+- `figures/fem_temporal_inputs_summary.csv` (40 rows)
+- `figures/fem_temporal_inputs_comparison.csv` (8 aggregated rows)
+
+The `time_only` model uses pressure-specific reference porosity and
+a pressure-independent logarithmic time coefficient.
+
+#### Recovery-Input Comparison
+
+The separate recovery-input analysis is implemented in
+`analysis/compare_fem_recovery_inputs.py`.
+
+Its existing outputs include:
+
+- `figures/fem_recovery_inputs_comparison.csv`
+- `figures/fem_recovery_inputs_summary.csv`
+
+#### Interpretation and Limitations
+
+These analyses assess the sensitivity of predicted deformation to
+the selected porosity-evolution formulation.
+
+The forecasts are model-dependent scenarios, not independently
+validated displacement predictions. Sample-specific elastic
+calibration and independent mechanical strain measurements would
+be needed for stronger experimental validation.
+
+
 ### Numerical Verification and Boundary-Condition Assessment
 
 The finite element implementation was subjected to additional numerical verification and a systematic review of its boundary-condition definitions.
@@ -233,3 +258,40 @@ Analytical displacement agreement, mesh refinement, eigenstrain verification, an
 The history-dependent deformation formulation remains exploratory. Its eigenstrains are inferred from porosity changes under a constant-grain-volume assumption, and its elastic parameters are illustrative rather than calibrated to sample B9.
 
 Consequently, the predicted history-dependent displacements should not be interpreted as independently validated mechanical deformation measurements.
+
+### Optimized Exponential Porosity Evolution and FEM Sensitivity
+
+An additional analysis investigates post-loading porosity evolution for carbonate sample B9 following the 7000-psi loading-history stage.
+
+The model uses the measured porosity at 96 hours as a pressure-specific reference:
+
+\[
+\phi(P,t)=\phi(P,96)+(A+Bz)\left[1-\exp\left(-\frac{t-96}{\tau}\right)\right]
+\]
+
+where \(z=(P-800)/4900\), pressure is expressed in psi, and time is expressed in hours.
+
+The optimized parameters are:
+
+- Characteristic time \(\tau=133.29506125\) hours
+- Coefficient \(A=-0.12721701\) porosity percentage points
+- Coefficient \(B=0.13018682\) porosity percentage points
+- In-sample porosity RMSE: 0.00556241 percentage points
+
+The model was fitted using observations at 197 and 730 hours, with measured 96-hour porosity values defining the reference state.
+
+The corresponding FEM sensitivity analysis includes 24 pressure–time scenarios covering eight pressure levels and three observation times.
+
+The analysis is implemented in:
+
+- `analysis/compare_fem_exponential_optimized.py`
+
+Results are saved to:
+
+- `figures/fem_exponential_optimized_comparison.csv`
+
+The porosity-based eigenstrain is evaluated under a constant-grain-volume assumption and propagated through the axisymmetric linear-elastic FEM formulation.
+
+The optimized exponential model is calibrated to the available observations. Its in-sample reconstruction accuracy does not establish independent temporal predictive validity.
+
+The resulting FEM displacements are model-dependent numerical estimates and have not been independently validated against measured mechanical deformation.
