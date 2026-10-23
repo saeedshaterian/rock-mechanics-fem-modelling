@@ -90,16 +90,34 @@ def linear_law(params, x_values):
     return intercept + slope * x_values
 
 
+def fit_constant_law(observed, name):
+    intercept = float(np.mean(observed))
+    predicted = np.full_like(observed, intercept, dtype=float)
+    rmse = float(np.sqrt(np.mean((observed - predicted) ** 2)))
+
+    print(f"\n{name} — CONSTANT MODEL")
+    print("-" * 45)
+    print(f"Intercept: {intercept:.6f}")
+    print(f"RMSE:      {rmse:.6f}")
+
+    return np.array([intercept]), predicted, rmse
+
+
 def fit_linear_law(observed, name):
     result = least_squares(
         lambda params: linear_law(params, x) - observed,
         x0=np.array([np.mean(observed), 0.0]),
     )
 
-    predicted = linear_law(result.x, x)
-    rmse = np.sqrt(np.mean((observed - predicted) ** 2))
+    if not result.success:
+        raise RuntimeError(
+            f"Linear calibration failed for {name}: {result.message}"
+        )
 
-    print(f"\n{name}")
+    predicted = linear_law(result.x, x)
+    rmse = float(np.sqrt(np.mean((observed - predicted) ** 2)))
+
+    print(f"\n{name} — LINEAR MODEL")
     print("-" * 45)
     print(f"Intercept: {result.x[0]:.6f}")
     print(f"Slope:     {result.x[1]:.6f}")
@@ -108,14 +126,17 @@ def fit_linear_law(observed, name):
     return result.x, predicted, rmse
 
 
-phi_params, phi_pred, phi_rmse = fit_linear_law(
+# Selected using AICc, leave-one-out RMSE,
+# and the exploratory 95% slope confidence interval.
+# Selection is specific to the available B9 dataset.
+
+phi_params, phi_pred, phi_rmse = fit_constant_law(
     phi_loss, "POROSITY-LOSS LAW"
 )
 
 k_params, k_pred, k_rmse = fit_linear_law(
     k_loss_pct, "PERMEABILITY-LOSS LAW"
 )
-
 
 # ---------------------------------------------------------
 # 4. Estimate an effective volumetric compaction proxy
@@ -207,10 +228,14 @@ results = pd.DataFrame({
     "porosity_after_7000_pct": phi_loaded,
     "porosity_loss_pct_points": phi_loss,
     "porosity_loss_predicted": phi_pred,
+    "porosity_loss_model": "constant",
+
     "permeability_initial_mD": k0,
     "permeability_after_7000_mD": k_loaded,
     "permeability_loss_pct": k_loss_pct,
     "permeability_loss_predicted_pct": k_pred,
+    "permeability_loss_model": "linear",
+
     "effective_volume_change_proxy_pct":
         effective_volume_change_pct,
 })
